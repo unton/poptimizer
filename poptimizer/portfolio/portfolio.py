@@ -199,7 +199,7 @@ class Portfolio:
         """Претенденты для добавления."""
         all_tickers = listing.securities()
         last_turnover = self._median_turnover(tuple(all_tickers))
-        minimal_turnover = self.value[PORTFOLIO] / (len(self.index) - 2)
+        minimal_turnover = self.value[:-1].max()
         last_turnover = last_turnover[last_turnover.gt(minimal_turnover)]
 
         index = last_turnover.index.difference(self.index)
@@ -219,7 +219,7 @@ class Portfolio:
         """Претенденты на удаление."""
         tickers = self.index[:-2]
         last_turnover = self._median_turnover(tuple(tickers))
-        minimal_turnover = self.value[PORTFOLIO] / (len(self.index) - 2)
+        minimal_turnover = self.value[:-1].max()
 
         low_turnover = last_turnover[last_turnover.lt(minimal_turnover)]
         low_turnover = low_turnover.sort_values().astype(int)
