@@ -249,8 +249,8 @@ def get_next_one() -> Optional[Organism]:
     Второй критерий - или самый мало обученный, или с максимальной верхней границе доверительного интервала.
     """
     pipeline = [
-        {"$project": {"date": True, "ub": {"$abs": "$ub"}}},
-        {"$sort": {"date": pymongo.ASCENDING, "ub": pymongo.DESCENDING}},
+        {"$project": {"date": True, "ub": {"$abs": "$ub"}, "days": {"$add": ["$genotype.Data.history_days", "$wins"]}}},
+        {"$sort": {"date": pymongo.ASCENDING, "ub": pymongo.DESCENDING, "days": pymongo.ASCENDING}},
         {"$limit": 1},
     ]
 

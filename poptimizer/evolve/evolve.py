@@ -30,6 +30,7 @@ class Evolution:  # noqa: WPS214
         self._end = None
         self._logger = logging.getLogger()
         self._tests = 1
+        self._prev_org = None
         self._prev_count = 0
         self._min_step = 1
         self._scale = 1
@@ -77,12 +78,13 @@ class Evolution:  # noqa: WPS214
         ):
             self._tests += 1
 
-        if current_count >= config.TARGET_POPULATION and current_count >= self._prev_count and d_min == d_max:
-            self._min_step += 1
+        if d_min == d_max:
+            if (self._prev_org and self._prev_org.id == org.id) or (current_count > config.TARGET_POPULATION):
+                self._min_step += 1
+            else:
+                self._min_step = max(1, self._min_step - 1)
 
-        if current_count < config.TARGET_POPULATION:
-            self._min_step = max(1, self._min_step - 1)
-
+        self._prev_org = org
         self._prev_count = current_count
 
         if current_count < config.TARGET_POPULATION:
@@ -122,7 +124,7 @@ class Evolution:  # noqa: WPS214
             label = " - новый организм"
 
         self._logger.info(f"Родитель{label}:")
-        if self._eval_organism(hunter) is None:
+        if (margin := self._eval_organism(hunter)) is None:
             return None
 
         if have_more_dates and (population.count() >= config.TARGET_POPULATION):
@@ -131,15 +133,15 @@ class Evolution:  # noqa: WPS214
             return None
 
         for n_child in itertools.count(1):
+            if (rnd := np.random.random()) < (slowness := margin[1]):
+                self._logger.info(f"Медленный не размножается {rnd=:.2%} < {slowness=:.2%}...\n")
+
+                return None
+
             self._logger.info(f"Потомок {n_child}:")
 
             hunter = hunter.make_child(1 / self._scale)
             if (margin := self._eval_organism(hunter)) is None:
-                return None
-
-            if (rnd := np.random.random()) < (slowness := margin[1]):
-                self._logger.info(f"Медленный не размножается {rnd=:.2%} < {slowness=:.2%}...\n")
-
                 return None
 
     def _eval_organism(self, organism: population.Organism) -> tuple[float, float] | None:
