@@ -72,12 +72,12 @@ class Optimizer:  # noqa: WPS214
 
         break_even = self._break_even(conf_int)
 
-        sell = self._select_sell(conf_int, break_even)
+        sell = self._select_sell(conf_int, break_even).sort_values(_PRIORITY, ascending=False)
 
-        bye = self._select_buy(break_even, conf_int)
+        bye = self._select_buy(break_even, conf_int).sort_values(_WEIGHT, ascending=True)
 
         rez = pd.concat([bye, sell], axis=0)
-        rez = rez.sort_values(_PRIORITY, ascending=False)
+        # rez = rez.sort_values(_PRIORITY, ascending=False)
         rez[_PRIORITY] = rez[_PRIORITY] - break_even
 
         if len(rez) == 1:
