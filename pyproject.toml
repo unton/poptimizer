@@ -1,94 +1,33 @@
-[tool.poetry]
+[project]
 name = "poptimizer"
 version = "2.0.0"
 description = "Long-term portfolio optimization"
-authors = ["WLMike <wlmike@gmail.com>"]
-license = "The Unlicense"
 readme = "README.md"
-repository = "https://github.com/WLM1ke/poptimizer"
-
-[tool.poetry.dependencies]
-python = ">=3.10,<3.11"
-pandas = "^1.5.3"
-numpy = "^1.23.1"
-scipy = "^1.8.1"
-scikit-learn = "^1.1.1"
-torch = "^2.0.0"
-tqdm = "^4.64.0"
-openpyxl = "^3.0.10"
-XlsxWriter = "^3.0.3"
-lxml = "^4.9.1"
-reportlab = "^3.6.11"
-matplotlib = "<3.6.0"
-pymongo = "^4.2.0"
-motor = "^3.0.0"
-aiomoex = "^2.0.0"
-beautifulsoup4 = "^4.11.1"
-aiohttp = "^3.8.1"
-pyppeteer = "^1.0.2"
-certifi = "^2022.6.15"
-psutil = "^5.9.1"
-PyYAML = "^6.0"
-typer = "^0.6.1"
-tzdata = "^2022.1"
-
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.0.1"
-wemake-python-styleguide = "^0.17.0"
-pytest = "^7.2.0"
-pytest-asyncio = "^0.19.0"
-pytest-cov = "^4.0.0"
-pytest-mock = "^3.8.2"
-black = "^23.1.0"
-
-[tool.mypy]
-ignore_missing_imports = true
-
-# pandas begins
-disallow_any_unimported = false
-disallow_any_expr = false
-disallow_any_decorated = false
-# pandas ends
-disallow_any_explicit = true
-disallow_any_generics = true
-disallow_subclassing_any = true
-
-disallow_untyped_calls = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-
-no_implicit_optional = true
-strict_optional = true
-
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_return_any = true
-warn_unreachable = true
-
-show_none_errors = true
-ignore_errors = false
-
-allow_untyped_globals = false
-allow_redefinition = false
-implicit_reexport = false
-strict_equality = true
-
-warn_unused_configs = true
-
-[[tool.mypy.overrides]]
-module = "*.tests.*"
-ignore_errors = true
-
-[tool.coverage.run]
-branch = true
-
-[tool.coverage.report]
-exclude_lines = ["if __name__ == .__main__.:"]
-omit = ["*/tests/*"]
+requires-python = "==3.10"
+dependencies = [
+    "aiohttp==3.8.1",
+    "aiomoex>=2.1.2",
+    "beautifulsoup4>=4.12.3",
+    "certifi>=2024.8.30",
+    "lxml>=5.3.0",
+    "matplotlib>=3.9.2",
+    "motor>=3.6.0",
+    "numpy>=1.23.1",
+    "openpyxl>=3.1.5",
+    "pandas==1.5.3",
+    "psutil>=6.0.0",
+    "pyppeteer>=2.0.0",
+    "pyyaml>=6.0.2",
+    "reportlab>=4.2.2",
+    "scikit-learn>=1.5.2",
+    "scipy>=1.13.1",
+    "torch==2.0.0",
+    "tqdm>=4.66.5",
+    "typer>=0.12.5",
+    "tzdata>=2024.2",
+    "xlsxwriter>=3.2.0",
+]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

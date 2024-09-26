@@ -118,3 +118,5 @@ ENV/
 
 # Poptimizer logs
 /logs/
+
+_scripts
