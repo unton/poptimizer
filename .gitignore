@@ -26,3 +26,7 @@ wheels/
 
 # Personal scripts
 /scripts
+
+# Other
+.idea/*
+logs/*
