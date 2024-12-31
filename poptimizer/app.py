@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 
-import uvloop
+import winloop
 
 from poptimizer import config
 from poptimizer.adapters import http, logger, mongo
@@ -47,4 +47,4 @@ def run() -> None:
 
     Настройки передаются через .env файл.
     """
-    uvloop.run(_run())
+    winloop.run(_run())
