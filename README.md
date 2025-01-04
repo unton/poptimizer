@@ -6,6 +6,10 @@
 
 - заполнить `.env.template` и переименовать его в `.env`
 - установить [Task](https://taskfile.dev/installation/)
+- установить [Scoop](https://scoop.sh/)
+- установить [NodeJS](https://nodejs.org/en/download)
+- установить [MongoDb Server](https://www.mongodb.com/try/download/community)
+- установить [CUDA Toolkit](https://developer.nvidia.com/cuda-12-4-0-download-archive) (достаточно установить runtime)
 - запустить команду установки необходимых инструментов
 
 ```bash

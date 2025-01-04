@@ -3,7 +3,7 @@ version: "3"
 vars:
   APP: poptimizer
   FRONTEND: frontend
-  TOOLS: go-task uv npm mongodb-community mongodb-compass
+  TOOLS: uv mongodb-database-tools
 
 tasks:
   default:
@@ -14,15 +14,14 @@ tasks:
   install:
     desc: Setup venv, install tools and dependencies
     cmds:
-      - brew tap mongodb/brew
-      - brew install {{.TOOLS}}
+      - scoop install {{.TOOLS}}
       - uv sync --frozen
       - cd {{.FRONTEND}} && npm install && npm run build
 
   update:
     desc: Upgrade tools and dependencies
     cmds:
-      - brew upgrade {{.TOOLS}}
+      - scoop update {{.TOOLS}}
       - uv sync --upgrade
       - cd {{.FRONTEND}} && npm update --save --save-dev
 
@@ -67,4 +66,4 @@ tasks:
   mongo:
     desc: Run MongoDB Server
     cmds:
-      - brew services start mongodb-community
+      - net start MongoDB
