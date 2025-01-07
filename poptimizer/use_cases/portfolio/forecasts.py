@@ -18,47 +18,46 @@ class ForecastHandler:
         msg: handler.ModelDeleted | handler.ModelEvaluated | handler.PositionsUpdated,
     ) -> handler.ForecastsAnalyzed | None:
         forecast = await ctx.get_for_update(forecasts.Forecast)
+        if forecast.day < msg.day:
+            forecast.init_day(msg.day)
+
         match msg:
-            case handler.ModelDeleted():
-                forecast.models -= {msg.uid}
-
-                return handler.ForecastsAnalyzed(day=msg.day)
-            case handler.ModelEvaluated():
-                if forecast.day != msg.day:
-                    forecast.init_day(msg.day)
-
-                forecast.models.add(msg.uid)
-
-                if len(forecast.models) ** 0.5 - forecast.forecasts_count**0.5 >= 1:
-                    port = await ctx.get(portfolio.Portfolio)
-                    if port.day == msg.day:
-                        await self._update(ctx, port, forecast)
-
-                return handler.ForecastsAnalyzed(day=msg.day)
             case handler.PositionsUpdated():
                 port = await ctx.get(portfolio.Portfolio)
-                if forecast.portfolio_ver < port.ver and port.day == msg.day:
-                    await self._update(ctx, port, forecast)
+                if forecast.portfolio_ver < port.ver:
+                    forecast.outdated = True
 
                 return None
+            case handler.ModelDeleted():
+                forecast.models -= {msg.uid}
+            case handler.ModelEvaluated():
+                forecast.models.add(msg.uid)
+
+        if forecast.update_required():
+            await self._update(ctx, forecast)
+
+        return handler.ForecastsAnalyzed(day=msg.day)
 
     async def _update(
         self,
         ctx: handler.Ctx,
-        port: portfolio.Portfolio,
         forecast: forecasts.Forecast,
     ) -> None:
+        port = await ctx.get(portfolio.Portfolio)
         tickers = port.tickers()
 
         models: list[evolve.Model] = []
 
         for uid in frozenset(forecast.models):
             model = await ctx.get(evolve.Model, uid)
-            if model.day != port.day or model.tickers != tickers:
+            if model.day != port.day or model.tickers != tickers or model.forecast_days != port.forecast_days:
                 forecast.models.remove(uid)
                 continue
 
             models.append(model)
+
+        if len(models) <= 1:
+            return
 
         await asyncio.to_thread(
             self._update_forecast,
@@ -168,6 +167,7 @@ class ForecastHandler:
         forecast.risk_tolerance = median_risk_tol.item()
         forecast.forecasts_count = len(means)
         forecast.portfolio_ver = port.ver
+        forecast.outdated = False
 
 
 def _median(*args: tuple[NDArray[np.double], ...]) -> list[NDArray[np.double]]:

@@ -5,16 +5,16 @@ import logging
 import time
 from typing import Literal, cast
 
-import pandas as pd
 import torch
 import tqdm
 from pydantic import BaseModel
 from torch import optim
 
 from poptimizer import consts, errors
-from poptimizer.domain.dl import data_loaders, datasets, ledoit_wolf, risk
+from poptimizer.domain.dl import data_loaders, datasets, features, ledoit_wolf, risk
 from poptimizer.domain.dl.wave_net import backbone, wave_net
 from poptimizer.domain.evolve import evolve
+from poptimizer.use_cases import handler
 from poptimizer.use_cases.dl import builder
 
 
@@ -25,7 +25,7 @@ class Batch(BaseModel):
 
     @property
     def num_feat_count(self) -> int:
-        return self.feats.close + self.feats.div + self.feats.ret
+        return sum(on for _, on in self.feats)
 
 
 class Optimizer(BaseModel): ...
@@ -76,18 +76,19 @@ class Trainer:
 
     async def update_model_metrics(
         self,
+        ctx: handler.Ctx,
         model: evolve.Model,
         test_days: int,
     ) -> None:
         start = time.monotonic()
 
         cfg = Cfg.model_validate(model.phenotype)
-        days = datasets.Days(
+        days = features.Days(
             history=cfg.batch.history_days,
             forecast=model.forecast_days,
             test=test_days,
         )
-        data = await self._builder.build(model.tickers, pd.Timestamp(model.day), cfg.batch.feats, days)
+        data = await self._builder.build(ctx, model.day, model.tickers, cfg.batch.feats, days)
 
         try:
             await asyncio.to_thread(
@@ -185,8 +186,8 @@ class Trainer:
                 rez = risk.optimize(
                     mean,
                     std,
-                    batch[datasets.FeatTypes.LABEL1P].cpu().numpy() - 1,
-                    batch[datasets.FeatTypes.RETURNS].cpu().numpy(),
+                    batch[features.FeatTypes.LABEL].cpu().numpy() - 1,
+                    batch[features.FeatTypes.RETURNS].cpu().numpy(),
                     cfg.risk,
                     forecast_days,
                 )
@@ -217,7 +218,7 @@ class Trainer:
             mean *= year_multiplier
             std *= year_multiplier**0.5
 
-            total_ret = batch[datasets.FeatTypes.RETURNS].cpu().numpy()
+            total_ret = batch[features.FeatTypes.RETURNS].cpu().numpy()
             cov = std.T * ledoit_wolf.ledoit_wolf_cor(total_ret)[0] * std
 
         return cast(list[list[float]], mean.tolist()), cov.tolist()
@@ -230,8 +231,8 @@ class Trainer:
         model_params = sum(tensor.numel() for tensor in net.parameters())
         self._lgr.info("Layers / parameters - %d / %d", modules, model_params)
 
-    def _batch_to_device(self, batch: datasets.Batch) -> datasets.Batch:
-        device_batch: datasets.Batch = {}
+    def _batch_to_device(self, batch: features.Batch) -> features.Batch:
+        device_batch: features.Batch = {}
         for k, v in batch.items():
             device_batch[k] = v.to(self._device)
 

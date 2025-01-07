@@ -8,8 +8,7 @@ import bson
 from poptimizer import consts, errors
 from poptimizer.domain import domain
 from poptimizer.domain.evolve import evolve
-from poptimizer.domain.portfolio import portfolio
-from poptimizer.use_cases import handler, view
+from poptimizer.use_cases import handler
 from poptimizer.use_cases.dl import builder, trainer
 
 _PARENT_COUNT: Final = 2
@@ -53,9 +52,9 @@ class Ctx(Protocol):
 
 
 class EvolutionHandler:
-    def __init__(self, viewer: view.Viewer) -> None:
+    def __init__(self) -> None:
         self._lgr = logging.getLogger()
-        self._viewer = viewer
+        self._builder = builder.Builder()
 
     async def __call__(
         self,
@@ -68,7 +67,7 @@ class EvolutionHandler:
         self._lgr.info("Day %s step %d: %s - %s", evolution.day, evolution.step, evolution.state, model)
 
         try:
-            await self._update_model_metrics(evolution, model)
+            await self._update_model_metrics(ctx, model, msg, evolution.test_days)
         except* errors.DomainError as err:
             await self._delete_model_on_error(ctx, evolution, model, err)
 
@@ -91,8 +90,7 @@ class EvolutionHandler:
             case True:
                 evolution.step += 1
             case False:
-                port = await ctx.get(portfolio.Portfolio)
-                evolution.init_new_day(day, port.tickers(), consts.FORECAST_DAYS)
+                evolution.init_new_day(day)
 
         return evolution
 
@@ -125,14 +123,16 @@ class EvolutionHandler:
 
     async def _update_model_metrics(
         self,
-        evolution: evolve.Evolution,
+        ctx: Ctx,
         model: evolve.Model,
+        msg: handler.DataNotChanged | handler.DataUpdated,
+        test_days: int,
     ) -> None:
-        model.day = evolution.day
-        model.tickers = evolution.tickers
-        model.forecast_days = evolution.forecast_days
-        tr = trainer.Trainer(builder.Builder(self._viewer))
-        await tr.update_model_metrics(model, evolution.test_days)
+        model.day = msg.day
+        model.tickers = msg.tickers
+        model.forecast_days = msg.forecast_days
+        tr = trainer.Trainer(self._builder)
+        await tr.update_model_metrics(ctx, model, test_days)
 
     async def _delete_model_on_error(
         self,
@@ -179,7 +179,7 @@ class EvolutionHandler:
                     return handler.ModelDeleted(day=model.day, uid=model.uid)
 
                 evolution.new_base(model)
-                self._lgr.info(f"New base Model(alfa={model.alfa:.2%}) set")
+                self._lgr.info(f"New base Model(alfa={model.alfa:.2%})")
                 evolution.state = evolve.State.CREATE_NEW_MODEL
             case evolve.State.CREATE_NEW_MODEL:
                 if self._should_delete(evolution, model):
@@ -191,7 +191,7 @@ class EvolutionHandler:
 
                 evolution.new_base(model)
                 evolution.state = evolve.State.CREATE_NEW_MODEL
-                self._lgr.info(f"New base Model(alfa={model.alfa:.2%}) set")
+                self._lgr.info(f"New base Model(alfa={model.alfa:.2%})")
 
                 if await ctx.count_models() > evolution.test_days:
                     evolution.delta_critical = 0

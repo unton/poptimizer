@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, PositiveInt, field_validator
 
 from poptimizer.domain import domain
 
@@ -33,6 +33,10 @@ class AppStarted(Event): ...
 
 class DataNotChanged(Event):
     day: domain.Day
+    tickers: tuple[domain.Ticker, ...] = Field(repr=False)
+    forecast_days: PositiveInt
+
+    _sorted_tickers = field_validator("tickers")(domain.sorted_tickers_validator)
 
 
 class NewDataPublished(Event):
@@ -47,16 +51,44 @@ class SecuritiesUpdated(Event):
     day: domain.Day
 
 
-class QuotesUpdated(Event):
-    day: domain.Day
-
-
 class DivUpdated(Event):
     day: domain.Day
 
 
+class QuotesUpdated(Event):
+    trading_days: list[domain.Day] = Field(repr=False)
+
+    @property
+    def day(self) -> domain.Day:
+        return self.trading_days[-1]
+
+    _sorted_trading_days = field_validator("trading_days")(domain.sorted_days_validator)
+
+
 class PortfolioUpdated(Event):
-    day: domain.Day
+    tickers: tuple[domain.Ticker, ...] = Field(repr=False)
+    trading_days: list[domain.Day] = Field(repr=False)
+    forecast_days: PositiveInt
+
+    @property
+    def day(self) -> domain.Day:
+        return self.trading_days[-1]
+
+    _sorted_tickers = field_validator("tickers")(domain.sorted_tickers_validator)
+    _sorted_trading_days = field_validator("trading_days")(domain.sorted_days_validator)
+
+
+class QuotesFeatUpdated(Event):
+    tickers: tuple[domain.Ticker, ...] = Field(repr=False)
+    trading_days: list[domain.Day] = Field(repr=False)
+    forecast_days: PositiveInt
+
+    @property
+    def day(self) -> domain.Day:
+        return self.trading_days[-1]
+
+    _sorted_tickers = field_validator("tickers")(domain.sorted_tickers_validator)
+    _sorted_trading_days = field_validator("trading_days")(domain.sorted_days_validator)
 
 
 class PositionsUpdated(Event):
@@ -69,6 +101,10 @@ class DivStatusUpdated(Event):
 
 class DataUpdated(Event):
     day: domain.Day
+    tickers: tuple[domain.Ticker, ...] = Field(repr=False)
+    forecast_days: PositiveInt
+
+    _sorted_tickers = field_validator("tickers")(domain.sorted_tickers_validator)
 
 
 class ModelDeleted(Event):

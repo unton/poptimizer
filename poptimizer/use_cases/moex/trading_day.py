@@ -52,7 +52,11 @@ class TradingDayHandler:
 
         new_last_check = _last_day()
         if table.day == new_last_check:
-            return handler.DataNotChanged(day=table.last)
+            return handler.DataNotChanged(
+                day=table.last,
+                tickers=table.tickers,
+                forecast_days=table.forecast_days,
+            )
 
         last_day = await self._get_last_trading_day_from_moex()
 
@@ -60,7 +64,11 @@ class TradingDayHandler:
             table = await ctx.get_for_update(trading_day.TradingDay)
             table.update_last_check(new_last_check)
 
-            return handler.DataNotChanged(day=table.last)
+            return handler.DataNotChanged(
+                day=table.last,
+                tickers=table.tickers,
+                forecast_days=table.forecast_days,
+            )
 
         return handler.NewDataPublished(day=last_day)
 
@@ -82,12 +90,16 @@ class TradingDayHandler:
 
         return payload.last_day()
 
-    async def update(self, ctx: handler.Ctx, msg: handler.PortfolioUpdated) -> handler.DataUpdated:
+    async def update(self, ctx: handler.Ctx, msg: handler.QuotesFeatUpdated) -> handler.DataUpdated:
         table = await ctx.get_for_update(trading_day.TradingDay)
-        table.update_last_trading_day(msg.day)
+        table.update_last_trading_day(msg.day, msg.tickers, msg.forecast_days)
         self._lgr.warning("Data updated for %s", msg.day)
 
-        return handler.DataUpdated(day=msg.day)
+        return handler.DataUpdated(
+            day=table.last,
+            tickers=table.tickers,
+            forecast_days=table.forecast_days,
+        )
 
 
 def _last_day() -> date:

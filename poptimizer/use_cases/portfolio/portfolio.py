@@ -13,22 +13,27 @@ class PortfolioHandler:
     def __init__(self) -> None:
         self._lgr = logging.getLogger()
 
-    async def __call__(self, ctx: handler.Ctx, msg: handler.DivUpdated) -> handler.PortfolioUpdated:
+    async def __call__(self, ctx: handler.Ctx, msg: handler.QuotesUpdated) -> handler.PortfolioUpdated:
         port = await ctx.get_for_update(portfolio.Portfolio)
 
-        sec_cache = await self._prepare_sec_cache(ctx, msg.day)
+        sec_cache = await self._prepare_sec_cache(ctx, msg.day, port.forecast_days)
         min_turnover = _calc_min_turnover(port, sec_cache)
 
         self._update_existing_positions(port, sec_cache, min_turnover)
         self._add_new_liquid(port, sec_cache, min_turnover)
         port.day = msg.day
 
-        return handler.PortfolioUpdated(day=msg.day)
+        return handler.PortfolioUpdated(
+            tickers=port.tickers(),
+            trading_days=msg.trading_days,
+            forecast_days=port.forecast_days,
+        )
 
     async def _prepare_sec_cache(
         self,
         ctx: handler.Ctx,
         update_day: domain.Day,
+        forecast_days: int,
     ) -> dict[domain.Ticker, portfolio.Position]:
         async with asyncio.TaskGroup() as tg:
             sec_task = tg.create_task(ctx.get(securities.Securities))
@@ -45,7 +50,7 @@ class PortfolioHandler:
                 ticker=sec.ticker,
                 lot=sec.lot,
                 price=quotes.result().df[-1].close,
-                turnover=statistics.median(quote.turnover for quote in quotes.result().df[-evolution.forecast_days :]),
+                turnover=statistics.median(quote.turnover for quote in quotes.result().df[-forecast_days:]),
             )
             for sec, quotes in zip(sec_table.df, quotes_tasks, strict=True)
             if len(quotes.result().df) > evolution.minimal_returns_days and quotes.result().df[-1].day == update_day
