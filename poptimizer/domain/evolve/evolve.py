@@ -11,24 +11,23 @@ from pydantic import (
     NonPositiveFloat,
     PositiveInt,
     computed_field,
-    field_validator,
     model_validator,
 )
 
 from poptimizer import consts
 from poptimizer.domain import domain
-from poptimizer.domain.dl import features
+from poptimizer.domain.dl import datasets
 from poptimizer.domain.evolve import genetics, genotype
 
-_INITIAL_MINIMAL_RETURNS_DAYS: Final = features.Days(
+_INITIAL_MINIMAL_RETURNS_DAYS: Final = datasets.Days(
     history=consts.INITIAL_HISTORY_DAYS_END,
-    forecast=consts.FORECAST_DAYS,
+    forecast=consts.INITIAL_FORECAST_DAYS,
     test=consts.INITIAL_POPULATION,
 ).minimal_returns_days
 
 
 class Model(domain.Entity):
-    tickers: tuple[domain.Ticker, ...] = Field(default_factory=tuple)
+    tickers: domain.Tickers = Field(default_factory=tuple)
     forecast_days: PositiveInt = 1
     genes: genetics.Genes = Field(default_factory=lambda: genotype.Genotype.model_validate({}).genes)
     duration: float = 0
@@ -36,8 +35,6 @@ class Model(domain.Entity):
     mean: list[list[FiniteFloat]] = Field(default_factory=list)
     cov: list[list[FiniteFloat]] = Field(default_factory=list)
     risk_tolerance: FiniteFloat = Field(default=0, ge=0, le=1)
-
-    _must_be_sorted_by_ticker = field_validator("tickers")(domain.sorted_tickers_validator)
 
     @model_validator(mode="after")
     def _match_length(self) -> Self:
@@ -62,7 +59,7 @@ class Model(domain.Entity):
         risk_tol = genes.risk.risk_tolerance
         history = genes.batch.history_days
 
-        return f"{self.__class__.__name__}(ver={self.ver}, risk_tol={risk_tol:.2%}, history={history:.2f})"
+        return f"{self.__class__.__name__}(ver={self.ver}, risk_aversion={1 - risk_tol:.2%}, history={history:.2f})"
 
     @computed_field
     def alfa(self) -> float:
@@ -91,6 +88,9 @@ class State(StrEnum):
 
 
 class Evolution(domain.Entity):
+    portfolio_ver: domain.Version = domain.Version(0)
+    tickers: domain.Tickers = Field(default_factory=tuple)
+    forecast_days: PositiveInt = 1
     state: State = State.EVAL_NEW_BASE_MODEL
     step: PositiveInt = 1
     base_model_uid: domain.UID = domain.UID("")
@@ -104,6 +104,19 @@ class Evolution(domain.Entity):
         self.day = day
         self.step = 1
         self.state = State.EVAL_NEW_BASE_MODEL
+
+    def update_portfolio_ver(
+        self,
+        portfolio_ver: domain.Version,
+        tickers: domain.Tickers,
+        forecast_days: int,
+    ) -> None:
+        if self.tickers != tickers or self.forecast_days != forecast_days:
+            self.state = State.EVAL_NEW_BASE_MODEL
+
+        self.portfolio_ver = portfolio_ver
+        self.tickers = tickers
+        self.forecast_days = forecast_days
 
     def adj_delta_critical(self, duration: NonNegativeFloat) -> float:
         return self.delta_critical * min(1, self.duration / duration)

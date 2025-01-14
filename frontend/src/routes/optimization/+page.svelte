@@ -37,19 +37,28 @@
 		};
 	});
 
+	const firstRetry = 1000;
+	const backOffFactor = 2;
+	let retryDelay = firstRetry;
+
 	$effect(() => {
-		if (portfolioView.ver != forecast.portfolio_ver) {
+		if (forecast.portfolio_ver != portfolioView.ver) {
 			setTimeout(async () => {
 				invalidate(`/api/forecast`);
-			}, 1000);
+			}, retryDelay);
+			retryDelay *= backOffFactor;
+
+			return;
 		}
+
+		retryDelay = firstRetry;
 	});
 </script>
 
 <Card
 	upper={`Date: ${forecast.day} ${status}`}
 	main={`Buy tickets: ${optimization.buy.length} / Sell tickets : ${optimization.sell.length}`}
-	lower={`Breakeven: ${formatPercent(optimization.breakEven)} / Forecasts: ${forecast.forecasts_count}`}
+	lower={`Forecasts: ${forecast.forecasts_count} / Breakeven: ${formatPercent(optimization.breakEven)}`}
 />
 <Table headers={["Ticker", "Weight", "Lower bound", "Upper bound", "Priority", "Signal"]}>
 	{#snippet rows()}

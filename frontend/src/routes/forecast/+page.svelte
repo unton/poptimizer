@@ -10,19 +10,28 @@
 	let forecast = $derived(data);
 	let status = $derived(forecast.portfolio_ver != portfolioView.ver ? "outdate" : "");
 
+	const firstRetry = 1000;
+	const backOffFactor = 2;
+	let retryDelay = firstRetry;
+
 	$effect(() => {
 		if (forecast.portfolio_ver != portfolioView.ver) {
 			setTimeout(async () => {
 				invalidate(`/api/forecast`);
-			}, 1000);
+			}, retryDelay);
+			retryDelay *= backOffFactor;
+
+			return;
 		}
+
+		retryDelay = firstRetry;
 	});
 </script>
 
 <Card
 	upper={`Date: ${forecast.day} ${status}`}
 	main={`Mean: ${formatPercent(forecast.mean)} / Std: ${formatPercent(forecast.std)}`}
-	lower={`Risk tolerance: ${formatPercent(forecast.risk_tolerance)} / Forecasts: ${forecast.forecasts_count}`}
+	lower={`Interval: ${forecast.forecast_days} day${forecast.forecast_days > 1 ? "s" : ""} / Risk aversion: ${formatPercent(1 - forecast.risk_tolerance)}`}
 />
 <Table headers={["Ticker", "Mean", "Std", "Beta", "Gradient"]}>
 	{#snippet rows()}

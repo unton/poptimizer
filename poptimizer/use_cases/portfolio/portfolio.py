@@ -16,18 +16,26 @@ class PortfolioHandler:
     async def __call__(self, ctx: handler.Ctx, msg: handler.QuotesUpdated) -> handler.PortfolioUpdated:
         port = await ctx.get_for_update(portfolio.Portfolio)
 
+        old_day = port.day
+        old_value = port.value
+        old_forecast_days = port.forecast_days
+
         sec_cache = await self._prepare_sec_cache(ctx, msg.day, port.forecast_days)
         min_turnover = _calc_min_turnover(port, sec_cache)
 
         self._update_existing_positions(port, sec_cache, min_turnover)
         self._add_new_liquid(port, sec_cache, min_turnover)
-        port.day = msg.day
+        port.update_forecast_days(msg.trading_days)
 
-        return handler.PortfolioUpdated(
-            tickers=port.tickers(),
-            trading_days=msg.trading_days,
-            forecast_days=port.forecast_days,
-        )
+        if old_forecast_days != port.forecast_days:
+            self._lgr.warning("Forecast days changed - %d -> %d", old_forecast_days, port.forecast_days)
+
+        if old_value and old_day != port.day:
+            new_value = port.value
+            change = new_value / old_value - 1
+            self._lgr.warning(f"Portfolio value changed {change:.2%} - {old_value:_.0f} -> {new_value:_.0f}")
+
+        return handler.PortfolioUpdated(trading_days=msg.trading_days)
 
     async def _prepare_sec_cache(
         self,
@@ -94,7 +102,8 @@ class PortfolioHandler:
             if position.turnover > min_turnover:
                 n, _ = port.find_position(position.ticker)
                 port.positions.insert(n, position)
-                self._lgr.warning("%s is added", ticker)
+                if port.ver:
+                    self._lgr.warning("%s is added", ticker)
 
 
 def _calc_min_turnover(

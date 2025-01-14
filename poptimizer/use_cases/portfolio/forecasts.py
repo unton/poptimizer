@@ -1,7 +1,9 @@
 import asyncio
+import logging
 from typing import cast
 
 import numpy as np
+from numpy import random
 from numpy.typing import NDArray
 from scipy import stats  # type: ignore[reportMissingTypeStubs]
 
@@ -12,31 +14,28 @@ from poptimizer.use_cases import handler
 
 
 class ForecastHandler:
+    def __init__(self) -> None:
+        self._lgr = logging.getLogger()
+
     async def __call__(
         self,
         ctx: handler.Ctx,
-        msg: handler.ModelDeleted | handler.ModelEvaluated | handler.PositionsUpdated,
+        msg: handler.ModelDeleted | handler.ModelEvaluated,
     ) -> handler.ForecastsAnalyzed | None:
         forecast = await ctx.get_for_update(forecasts.Forecast)
         if forecast.day < msg.day:
             forecast.init_day(msg.day)
 
         match msg:
-            case handler.PositionsUpdated():
-                port = await ctx.get(portfolio.Portfolio)
-                if forecast.portfolio_ver < port.ver:
-                    forecast.outdated = True
-
-                return None
             case handler.ModelDeleted():
                 forecast.models -= {msg.uid}
             case handler.ModelEvaluated():
                 forecast.models.add(msg.uid)
 
-        if forecast.update_required():
+        if forecast.update_required(msg.portfolio_ver):
             await self._update(ctx, forecast)
 
-        return handler.ForecastsAnalyzed(day=msg.day)
+        return handler.ForecastsAnalyzed(day=forecast.day, portfolio_ver=forecast.portfolio_ver)
 
     async def _update(
         self,
@@ -44,37 +43,37 @@ class ForecastHandler:
         forecast: forecasts.Forecast,
     ) -> None:
         port = await ctx.get(portfolio.Portfolio)
-        tickers = port.tickers()
+        positions = port.normalized_positions
+        port_tickers = tuple(pos.ticker for pos in positions)
 
         models: list[evolve.Model] = []
 
         for uid in frozenset(forecast.models):
             model = await ctx.get(evolve.Model, uid)
-            if model.day != port.day or model.tickers != tickers or model.forecast_days != port.forecast_days:
+            if model.day != port.day or model.tickers != port_tickers or model.forecast_days != port.forecast_days:
                 forecast.models.remove(uid)
                 continue
 
             models.append(model)
 
-        if len(models) <= 1:
+        if len(models) <= 1 or not any(pos.weight for pos in positions):
             return
 
-        await asyncio.to_thread(
-            self._update_forecast,
-            port,
-            forecast,
-            models,
-        )
+        forecast.day = port.day
+        forecast.portfolio_ver = port.ver
+        forecast.forecast_days = port.forecast_days
+        forecast.forecasts_count = len(models)
+
+        await asyncio.to_thread(self._update_forecast, forecast, models, positions)
 
     def _update_forecast(
         self,
-        port: portfolio.Portfolio,
         forecast: forecasts.Forecast,
         models: list[evolve.Model],
+        positions: list[portfolio.NormalizedPosition],
     ) -> None:
-        tickers = port.tickers()
-        weights = np.array(port.weights()).reshape(-1, 1)
-        turnover = np.array(port.normalized_turnover()).reshape(-1, 1)
+        weights = np.array([pos.weight for pos in positions]).reshape(-1, 1)
+        turnover = np.array([pos.norm_turnover for pos in positions]).reshape(-1, 1)
 
         means: list[NDArray[np.double]] = []
         port_means: list[float] = []
@@ -87,7 +86,7 @@ class ForecastHandler:
         costs: list[NDArray[np.double]] = []
 
         risk_tol: list[float] = []
-        p_value = consts.P_VALUE * 2 / len(tickers)
+        p_value = consts.P_VALUE * 2 / len(positions)
 
         for model in models:
             mean: NDArray[np.double] = np.array(model.mean)
@@ -137,24 +136,24 @@ class ForecastHandler:
             _median,
             confidence_level=(1 - p_value),
             paired=True,
-            random_state=0,
+            rng=random.default_rng(0),
         ).confidence_interval
         _, median_grads_upper = stats.bootstrap(  # type: ignore[reportUnknownMemberType]
             stacked_grads + stacked_costs,
             _median,
             confidence_level=(1 - p_value),
             paired=True,
-            random_state=0,
+            rng=random.default_rng(0),
         ).confidence_interval
 
         median_risk_tol = np.median(risk_tol)
 
         forecast.positions = []
-        for n, ticker in enumerate(tickers):
+        for n, pos in enumerate(positions):
             forecast.positions.append(
                 forecasts.Position(
-                    ticker=ticker,
-                    weight=weights[n, 0],
+                    ticker=pos.ticker,
+                    weight=pos.weight,
                     mean=median_mean[n],
                     std=median_std[n],
                     beta=median_betas[n],
@@ -165,9 +164,16 @@ class ForecastHandler:
             )
 
         forecast.risk_tolerance = median_risk_tol.item()
-        forecast.forecasts_count = len(means)
-        forecast.portfolio_ver = port.ver
-        forecast.outdated = False
+
+        bye_grad, bye_ticker = max((pos.grad_lower, pos.ticker) for pos in forecast.positions)
+        sell_grad, sell_ticker = min((pos.grad_upper, pos.ticker) for pos in forecast.positions if pos.weight)
+        if bye_grad > sell_grad:
+            self._lgr.warning(
+                "New %d forecasts update - sell %s and buy %s",
+                forecast.forecasts_count,
+                sell_ticker,
+                bye_ticker,
+            )
 
 
 def _median(*args: tuple[NDArray[np.double], ...]) -> list[NDArray[np.double]]:

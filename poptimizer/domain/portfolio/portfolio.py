@@ -2,6 +2,7 @@ import bisect
 from typing import Annotated, Self
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     Field,
     NonNegativeFloat,
@@ -27,8 +28,15 @@ class Position(BaseModel):
     accounts: AccountData = Field(default_factory=dict)
 
 
+class NormalizedPosition(BaseModel):
+    ticker: domain.Ticker
+    weight: float = Field(ge=0, le=1)
+    norm_turnover: NonNegativeFloat
+
+
 class Portfolio(domain.Entity):
-    forecast_days: PositiveInt = consts.FORECAST_DAYS
+    trading_interval: float = Field(consts.INITIAL_FORECAST_DAYS, ge=1)
+    traded: bool = False
     account_names: Annotated[
         set[domain.AccName],
         PlainSerializer(
@@ -37,7 +45,10 @@ class Portfolio(domain.Entity):
         ),
     ] = Field(default_factory=set)
     cash: AccountData = Field(default_factory=dict)
-    positions: list[Position] = Field(default_factory=list)
+    positions: Annotated[
+        list[Position],
+        AfterValidator(domain.sorted_with_ticker_field_validator),
+    ] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _positions_have_know_accounts(self) -> Self:
@@ -46,8 +57,6 @@ class Portfolio(domain.Entity):
                 raise ValueError(f"{position.ticker} has unknown accounts {unknown_accounts}")
 
         return self
-
-    _must_be_sorted_by_ticker = field_validator("positions")(domain.sorted_with_ticker_field_validator)
 
     @field_validator("positions")
     def _positions_are_multiple_of_lots(cls, positions: list[Position]) -> list[Position]:
@@ -63,8 +72,23 @@ class Portfolio(domain.Entity):
 
         return positions
 
-    def tickers(self) -> tuple[domain.Ticker, ...]:
-        return tuple(position.ticker for position in self.positions)
+    @property
+    def forecast_days(self) -> int:
+        return round(self.trading_interval)
+
+    def update_forecast_days(self, trading_days: list[domain.Day]) -> None:
+        old_day = self.day
+        self.day = trading_days[-1]
+
+        if not self.ver:
+            old_day = self.day
+
+        for day in reversed(trading_days):
+            if day <= old_day:
+                break
+
+            self.trading_interval = self.trading_interval + 1 / self.trading_interval - self.traded
+            self.traded = False
 
     def create_acount(self, name: domain.AccName) -> None:
         if name in self.account_names:
@@ -131,14 +155,33 @@ class Portfolio(domain.Entity):
                 if not amount:
                     position.accounts.pop(acc_name)
 
-    def weights(self) -> list[float]:
-        values = [position.price * sum(position.accounts.values()) for position in self.positions]
-        port_value = sum(values) + sum(self.cash.values())
-
-        return [value / port_value for value in values]
+                if not position.accounts:
+                    self.traded = True
 
     def normalized_turnover(self) -> list[float]:
         values = [position.price * sum(position.accounts.values()) for position in self.positions]
         port_value = sum(values) + sum(self.cash.values())
 
         return [position.turnover / port_value for position in self.positions]
+
+    @property
+    def normalized_positions(self) -> list[NormalizedPosition]:
+        values = [pos.price * sum(pos.accounts.values()) for pos in self.positions]
+        port_value = sum(values) + sum(self.cash.values())
+        if not port_value:
+            port_value = 1
+
+        return [
+            NormalizedPosition(
+                ticker=pos.ticker,
+                weight=value / port_value,
+                norm_turnover=pos.turnover / port_value,
+            )
+            for pos, value in zip(self.positions, values, strict=True)
+        ]
+
+    @property
+    def value(self) -> float:
+        values = [pos.price * sum(pos.accounts.values()) for pos in self.positions]
+
+        return sum(values) + sum(self.cash.values())

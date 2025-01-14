@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from poptimizer import errors
 from poptimizer.domain import domain
 from poptimizer.domain.moex import trading_day
+from poptimizer.domain.portfolio import portfolio
 from poptimizer.use_cases import handler
 
 # Часовой пояс MOEX
@@ -38,39 +39,51 @@ class _Payload(BaseModel):
         return df
 
 
-class TradingDayHandler:
+class DataHandler:
     def __init__(self, http_client: aiohttp.ClientSession) -> None:
         self._lgr = logging.getLogger()
         self._http_client = http_client
 
-    async def check(
+    async def __call__(
         self,
         ctx: handler.Ctx,
-        msg: handler.AppStarted | handler.ForecastsAnalyzed,  # noqa: ARG002
-    ) -> handler.DataNotChanged | handler.NewDataPublished:
+        msg: handler.AppStarted | handler.QuotesFeatUpdated | handler.ForecastsAnalyzed,
+    ) -> handler.NewDataPublished | handler.DataChecked:
+        match msg:
+            case handler.AppStarted() | handler.ForecastsAnalyzed():
+                return await self._check(ctx)
+            case handler.QuotesFeatUpdated():
+                return await self._update(ctx, msg.day)
+
+    async def _check(self, ctx: handler.Ctx) -> handler.NewDataPublished | handler.DataChecked:
         table = await ctx.get(trading_day.TradingDay)
 
         new_last_check = _last_day()
-        if table.day == new_last_check:
-            return handler.DataNotChanged(
-                day=table.last,
-                tickers=table.tickers,
-                forecast_days=table.forecast_days,
-            )
+        if table.last_check >= new_last_check:
+            return await self._check_portfolio_ver(ctx, table)
 
         last_day = await self._get_last_trading_day_from_moex()
 
         if table.day >= last_day:
             table = await ctx.get_for_update(trading_day.TradingDay)
-            table.update_last_check(new_last_check)
+            table.last_check = new_last_check
 
-            return handler.DataNotChanged(
-                day=table.last,
-                tickers=table.tickers,
-                forecast_days=table.forecast_days,
-            )
+            return await self._check_portfolio_ver(ctx, table)
 
         return handler.NewDataPublished(day=last_day)
+
+    async def _check_portfolio_ver(self, ctx: handler.Ctx, table: trading_day.TradingDay) -> handler.DataChecked:
+        port = await ctx.get(portfolio.Portfolio)
+        if port.ver > table.portfolio_ver:
+            table = await ctx.get_for_update(trading_day.TradingDay)
+            table.portfolio_ver = port.ver
+
+            self._lgr.warning("New portfolio version %s", table.portfolio_ver)
+
+        return handler.DataChecked(
+            day=table.day,
+            portfolio_ver=table.portfolio_ver,
+        )
 
     async def _get_last_trading_day_from_moex(self) -> domain.Day:
         try:
@@ -90,16 +103,12 @@ class TradingDayHandler:
 
         return payload.last_day()
 
-    async def update(self, ctx: handler.Ctx, msg: handler.QuotesFeatUpdated) -> handler.DataUpdated:
+    async def _update(self, ctx: handler.Ctx, last_trading_day: domain.Day) -> handler.DataChecked:
         table = await ctx.get_for_update(trading_day.TradingDay)
-        table.update_last_trading_day(msg.day, msg.tickers, msg.forecast_days)
-        self._lgr.warning("Data updated for %s", msg.day)
+        table.update_last_trading_day(last_trading_day)
+        self._lgr.warning("Moex data updated for %s", last_trading_day)
 
-        return handler.DataUpdated(
-            day=table.last,
-            tickers=table.tickers,
-            forecast_days=table.forecast_days,
-        )
+        return await self._check_portfolio_ver(ctx, table)
 
 
 def _last_day() -> date:

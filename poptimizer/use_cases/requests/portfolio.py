@@ -68,6 +68,7 @@ class Forecast(handler.DTO):
     std: float = 0
     positions: list[forecasts.Position]
     forecasts_count: int
+    forecast_days: int
     risk_tolerance: float
 
     @classmethod
@@ -79,6 +80,7 @@ class Forecast(handler.DTO):
             std=forecast.std,
             positions=forecast.positions,
             forecasts_count=forecast.forecasts_count,
+            forecast_days=forecast.forecast_days,
             risk_tolerance=forecast.risk_tolerance,
         )
 
@@ -103,12 +105,12 @@ class PortfolioHandler:
 
         return Portfolio.from_updated_portfolio(port)
 
-    async def update_position(self, ctx: handler.Ctx, msg: Position) -> tuple[Portfolio, handler.PositionsUpdated]:
+    async def update_position(self, ctx: handler.Ctx, msg: Position) -> Portfolio:
         port = await ctx.get_for_update(portfolio.Portfolio)
 
         port.update_position(msg.account, msg.ticker, msg.amount)
 
-        return Portfolio.from_updated_portfolio(port), handler.PositionsUpdated(day=port.day)
+        return Portfolio.from_updated_portfolio(port)
 
     async def get_forecast(self, ctx: handler.Ctx, msg: GetForecast) -> Forecast:  # noqa: ARG002
         forecast = await ctx.get(forecasts.Forecast)
