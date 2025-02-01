@@ -27,6 +27,9 @@ wheels/
 # Personal scripts
 /scripts
 
+# Previous version backup
+/backup
+
 # Other
 .idea/*
 logs/*

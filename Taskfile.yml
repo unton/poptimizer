@@ -16,14 +16,42 @@ tasks:
     cmds:
       - scoop install {{.TOOLS}}
       - uv sync --frozen
-      - cd {{.FRONTEND}} && npm install && npm run build
+      - cd {{.FRONTEND}} && npm install
+      - task: build
 
-  update:
-    desc: Upgrade tools and dependencies
+  mongo:
+    desc: Run MongoDB server service
     cmds:
-      - scoop update {{.TOOLS}}
-      - uv sync --upgrade
-      - cd {{.FRONTEND}} && npm update --save --save-dev
+      - brew services start mongodb-community
+      
+  update_ver:
+    desc: Update POptimizer version and rebuild frontend
+    cmds:
+      - rm -rf backup
+      - mkdir backup
+      - cp -r $(ls -A | grep -vF -e .venv -e .git) backup
+      - git stash
+      - git pull
+      - task: lint
+      - task: test
+      - task: build
+      - git stash pop
+
+  revert_ver:
+    desc: Revert POptimizer to version form backup
+    cmds:
+      - rm -rf $(ls -A | grep -vF -e backup -e .venv -e .git)
+      - cp -r backup/. . 
+
+  run:
+    desc: Run POptimizer
+    cmds:
+      - uv run {{.APP}} run
+
+  export:
+    desc: Export current portfolio
+    cmds:
+      - uv run {{.APP}} export
 
   format:
     desc: Format
@@ -49,9 +77,6 @@ tasks:
   build:
     desc: Build frontend
     cmds:
-      - task: format
-      - task: lint
-      - task: test
       - cd {{.FRONTEND}} && npm run build
 
   dev:
@@ -59,12 +84,9 @@ tasks:
     cmds:
       - cd {{.FRONTEND}} && npm run dev -- --open
 
-  run:
-    desc: Run POptimizer with .env file
+  update:
+    desc: Update tools and dependencies
     cmds:
-      - uv run {{.APP}}
-
-  mongo:
-    desc: Run MongoDB Server
-    cmds:
-      - net start MongoDB
+      - scoop upgrade {{.TOOLS}}
+      - uv sync --upgrade
+      - cd {{.FRONTEND}} && npm update --save --save-dev

@@ -66,10 +66,12 @@ class Model(domain.Entity):
         return f"{self.__class__.__name__}(ver={self.ver}, risk_aversion={1 - risk_tol:.2%}, history={history:.2f})"
 
     @computed_field
+    @property
     def alfa_mean(self) -> float:
         return statistics.mean(self.alfa or [0])
 
     @computed_field
+    @property
     def llh_mean(self) -> float:
         return statistics.mean(self.llh or [0])
 
@@ -121,6 +123,8 @@ class Evolution(domain.Entity):
     def init_new_day(self, day: domain.Day) -> None:
         self.day = day
         self.step = 1
+        self.test_days = max(2, self.test_days - 1)
+        self.minimal_returns_days = max(1, self.minimal_returns_days - 1)
         self.state = State.EVAL_NEW_BASE_MODEL
 
     def update_portfolio_ver(
