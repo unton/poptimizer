@@ -16,12 +16,13 @@ def make_days():
 
 def test_no_features_error(days) -> None:
     with pytest.raises(errors.DomainError, match="no features"):
-        datasets.TickerData([], days, set())
+        datasets.TickerData(days, [], [], [], lag_feat=False)
 
 
 def test_short_history_error(days) -> None:
     with pytest.raises(errors.TooShortHistoryError):
         datasets.TickerData(
+            days,
             [
                 {
                     features.NumFeat.RETURNS: i,
@@ -30,14 +31,16 @@ def test_short_history_error(days) -> None:
                 }
                 for i in range(9)
             ],
-            days,
-            {features.NumFeat.OPEN, features.NumFeat.CLOSE},
+            [features.NumFeat.OPEN, features.NumFeat.CLOSE],
+            [],
+            lag_feat=False,
         )
 
 
 @pytest.fixture(name="one_ticker_data")
 def make_one_ticker_data(days):
     return datasets.TickerData(
+        days,
         [
             {
                 features.NumFeat.RETURNS: float(i),
@@ -46,8 +49,9 @@ def make_one_ticker_data(days):
             }
             for i in range(11)
         ],
-        days,
-        {features.NumFeat.OPEN, features.NumFeat.CLOSE},
+        [features.NumFeat.OPEN, features.NumFeat.CLOSE],
+        [],
+        lag_feat=False,
     )
 
 
@@ -68,8 +72,8 @@ class TestOneTickerData:
             case_first.num_feat,
             torch.tensor(
                 [
-                    [2, 3, 4, 5],
                     [1, 2, 3, 4],
+                    [2, 3, 4, 5],
                 ],
                 dtype=torch.float32,
             ),
@@ -86,8 +90,8 @@ class TestOneTickerData:
             case_last.num_feat,
             torch.tensor(
                 [
-                    [3, 4, 5, 6],
                     [2, 3, 4, 5],
+                    [3, 4, 5, 6],
                 ],
                 dtype=torch.float,
             ),
@@ -113,8 +117,8 @@ class TestOneTickerData:
             case_first.num_feat,
             torch.tensor(
                 [
-                    [5, 6, 7, 8],
                     [4, 5, 6, 7],
+                    [5, 6, 7, 8],
                 ],
                 dtype=torch.float32,
             ),
@@ -135,8 +139,8 @@ class TestOneTickerData:
             case_last.num_feat,
             torch.tensor(
                 [
-                    [7, 8, 9, 10],
                     [6, 7, 8, 9],
+                    [7, 8, 9, 10],
                 ],
                 dtype=torch.float32,
             ),
@@ -156,7 +160,7 @@ class TestOneTickerData:
         assert torch.allclose(
             case.num_feat,
             torch.tensor(
-                [[9, 10, 11, 12], [8, 9, 10, 11]],
+                [[8, 9, 10, 11], [9, 10, 11, 12]],
                 dtype=torch.float32,
             ),
         )
@@ -181,6 +185,7 @@ def test_train_data_loader(one_ticker_data) -> None:
 @pytest.fixture(name="second_ticker_data")
 def make_second_ticker_data(days):
     return datasets.TickerData(
+        days,
         [
             {
                 features.NumFeat.RETURNS: float(i),
@@ -189,8 +194,9 @@ def make_second_ticker_data(days):
             }
             for i in range(12)
         ],
-        days,
-        {features.NumFeat.OPEN, features.NumFeat.CLOSE},
+        [features.NumFeat.CLOSE, features.NumFeat.OPEN],
+        [],
+        lag_feat=False,
     )
 
 
@@ -235,7 +241,7 @@ class TestTestDataLoader:
         assert torch.allclose(
             num[0],
             torch.tensor(
-                [range(7, 11), range(6, 10)],
+                [range(6, 10), range(7, 11)],
                 dtype=torch.float32,
             ),
         )
@@ -295,8 +301,8 @@ def test_forecast_data_loader(one_ticker_data, second_ticker_data) -> None:
         num[0],
         torch.tensor(
             [
-                range(9, 13),
                 range(8, 12),
+                range(9, 13),
             ],
             dtype=torch.float32,
         ),

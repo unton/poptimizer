@@ -23,14 +23,12 @@ class NumFeat(StrEnum):
 
 
 @unique
-class EmbeddingFeat(StrEnum):
+class EmbFeat(StrEnum):
     ticker = auto()
-    board = auto()
-    type = auto()
-    instrument = auto()
+    ticker_type = auto()
 
 
-class EmbeddingFeatValue(BaseModel):
+class EmbeddingFeatDesc(BaseModel):
     value: NonNegativeInt
     size: int = Field(ge=2)
 
@@ -44,7 +42,7 @@ class EmbeddingFeatValue(BaseModel):
 
 class Features(domain.Entity):
     numerical: list[dict[NumFeat, FiniteFloat]] = Field(default_factory=list)
-    embedding: dict[EmbeddingFeat, EmbeddingFeatValue] = Field(default_factory=dict)
+    embedding: dict[EmbFeat, EmbeddingFeatDesc] = Field(default_factory=dict)
 
     @field_validator("numerical")
     def _numerical_match_labels(
@@ -55,23 +53,10 @@ class Features(domain.Entity):
             return numerical
 
         keys = numerical[0].keys()
-        if not set(NumFeat).issuperset(keys):
-            raise ValueError("key are not numerical features")
-
         if any(row.keys() != keys for row in numerical):
             raise ValueError("numerical features keys mismatch")
 
         return numerical
-
-    @field_validator("embedding")
-    def _embedding_match_labels(
-        cls,
-        embedding: dict[EmbeddingFeat, EmbeddingFeatValue],
-    ) -> dict[EmbeddingFeat, EmbeddingFeatValue]:
-        if embedding and embedding.keys() != set(EmbeddingFeat):
-            raise ValueError("key are not embedding features")
-
-        return embedding
 
     def _check_new_day(self, day: domain.Day) -> None:
         if self.day != day:
