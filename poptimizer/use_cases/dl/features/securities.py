@@ -8,7 +8,7 @@ from poptimizer.use_cases import handler
 
 
 class SecFeatHandler:
-    async def __call__(self, ctx: handler.Ctx, msg: handler.IndexFeatUpdated) -> handler.SecFeatUpdated:
+    async def __call__(self, ctx: handler.Ctx, msg: handler.YearDayFeatUpdated) -> handler.SecFeatUpdated:
         async with asyncio.TaskGroup() as tg:
             sec_task = tg.create_task(ctx.get(securities.Securities))
             port = await ctx.get(portfolio.Portfolio)
@@ -19,8 +19,8 @@ class SecFeatHandler:
 
             for n, feat_task in enumerate(feat):
                 feat = await feat_task
-                feat.embedding[EmbFeat.ticker] = EmbeddingFeatDesc(value=n, size=pos_count)
-                feat.embedding[EmbFeat.ticker_type] = EmbeddingFeatDesc(value=sec_types[feat.uid], size=types_count)
+                feat.embedding[EmbFeat.TICKER] = EmbeddingFeatDesc(value=n, size=pos_count)
+                feat.embedding[EmbFeat.TICKER_TYPE] = EmbeddingFeatDesc(value=sec_types[feat.uid], size=types_count)
 
         return handler.SecFeatUpdated(day=msg.day)
 
