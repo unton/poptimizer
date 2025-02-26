@@ -43,31 +43,15 @@ class Repo:
         collection_name = adapter.get_component_name(evolve.Model)
         collection = self._db[collection_name]
 
-        order = random.choice(  # noqa: S311
-            [
-                {
-                    "day": pymongo.ASCENDING,
-                    "ver": pymongo.ASCENDING,
-                },
-                {
-                    "alfa_mean": pymongo.ASCENDING,
-                },
-                {
-                    "alfa_mean": pymongo.DESCENDING,
-                },
-                {
-                    "llh_mean": pymongo.ASCENDING,
-                },
-                {
-                    "llh_mean": pymongo.DESCENDING,
-                },
-            ]
-        )
+        order = {
+            "day": random.choice([pymongo.ASCENDING, pymongo.DESCENDING]),  # noqa: S311
+            random.choice(["alfa_mean", "llh_mean"]): random.choice([pymongo.ASCENDING, pymongo.DESCENDING]),  # noqa: S311
+        }
+
         pipeline = [
             {
                 "$project": {
                     "day": True,
-                    "ver": True,
                     "alfa_mean": True,
                     "llh_mean": True,
                 },
@@ -114,6 +98,19 @@ class Repo:
             doc = await self._create_new(collection_name, uid)
 
         return self._create_entity(t_entity, doc)
+
+    async def get_all[E: domain.Entity](
+        self,
+        t_entity: type[E],
+    ) -> AsyncIterator[E]:
+        collection_name = adapter.get_component_name(t_entity)
+        db = self._db[collection_name]
+
+        try:
+            async for doc in db.find({}):
+                yield self._create_entity(t_entity, doc)
+        except PyMongoError as err:
+            raise errors.AdapterError("can't load entities from {collection_name}") from err
 
     async def _load(self, collection_name: str, uid: domain.UID) -> MongoDocument | None:
         collection = self._db[collection_name]

@@ -45,6 +45,6 @@ async def _run() -> None:
 def run() -> None:
     """Run POptimizer.
 
-    Can't be stopped with Ctrl-C/SIGINT. Settings from .env.
+    Can be stopped with Ctrl-C/SIGINT. Settings from .env.
     """
     winloop.run(_run())
