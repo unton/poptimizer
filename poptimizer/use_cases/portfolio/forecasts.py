@@ -123,8 +123,8 @@ class ForecastHandler:
 
             risk_tol.append(model.risk_tolerance)
 
-        forecast.mean = np.median(port_means).item()
-        forecast.std = np.median(port_stds).item()
+        forecast.mean = np.median(port_means).item()  # type: ignore[reportUnknownMemberType]
+        forecast.std = np.median(port_stds).item()  # type: ignore[reportUnknownMemberType]
         median_mean = np.median(np.hstack(means), axis=1)
         median_std = np.median(np.hstack(stds), axis=1)
         median_betas = np.median(np.hstack(betas), axis=1)
@@ -148,7 +148,7 @@ class ForecastHandler:
             rng=random.default_rng(0),
         ).confidence_interval
 
-        median_risk_tol = np.median(risk_tol)
+        median_risk_tol = np.median(risk_tol)  # type: ignore[reportUnknownMemberType]
 
         forecast.positions = []
         for n, pos in enumerate(positions):
@@ -165,23 +165,24 @@ class ForecastHandler:
                 )
             )
 
-        forecast.risk_tolerance = median_risk_tol.item()
+        forecast.risk_tolerance = median_risk_tol.item()  # type: ignore[reportUnknownMemberType]
 
-        bye_grad, bye_ticker = max((pos.grad_lower, pos.ticker) for pos in forecast.positions)
+        buy_grad, buy_ticker = max((pos.grad_lower, pos.ticker) for pos in forecast.positions)
         sell_grad, sell_ticker = min((pos.grad_upper, pos.ticker) for pos in forecast.positions if pos.weight)
 
-        match bye_grad > sell_grad:
+        match buy_grad > sell_grad:
             case True:
                 self._lgr.warning(
                     "New %d forecasts update - sell %s and buy %s",
                     forecast.forecasts_count,
                     sell_ticker,
-                    bye_ticker,
+                    buy_ticker,
                 )
             case False:
                 self._lgr.warning(
-                    "New %d forecasts update - portfolio is close to optimal optimization is not required",
+                    "New %d forecasts update - portfolio is close to optimal, allocate free cash to %s",
                     forecast.forecasts_count,
+                    buy_ticker,
                 )
 
 

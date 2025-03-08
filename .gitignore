@@ -30,6 +30,9 @@ wheels/
 # Previous version backup
 /backup
 
+# PDF reports
+/reports
+
 # Other
 .idea/*
 logs/*

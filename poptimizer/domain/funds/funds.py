@@ -4,29 +4,55 @@ from pydantic import AfterValidator, BaseModel, Field, NonNegativeFloat, Positiv
 
 from poptimizer.domain import domain
 
-Shareholder = NewType("Shareholder", str)
+Investor = NewType("Investor", str)
 
 
 class Row(BaseModel):
     day: domain.Day
     value: PositiveFloat
     dividends: NonNegativeFloat
-    inflows: dict[Shareholder, float]
-    shares: dict[Shareholder, NonNegativeFloat]
+    inflows: dict[Investor, float]
+    shares: dict[Investor, NonNegativeFloat]
 
     @model_validator(mode="after")
-    def _check_shareholders(self) -> Self:
+    def _check_investors(self) -> Self:
         if self.inflows.keys() - self.shares.keys():
-            raise ValueError("shareholders and inflows mismatch")
+            raise ValueError("investors and inflows mismatch")
 
         return self
 
     @field_validator("inflows")
-    def _non_zero_inflows(cls, inflows: dict[Shareholder, float]) -> dict[Shareholder, float]:
+    def _non_zero_inflows(cls, inflows: dict[Investor, float]) -> dict[Investor, float]:
         if any(inflow == 0 for inflow in inflows.values()):
             raise ValueError("inflows can't be zero")
 
         return inflows
+
+    def get_value(self, investor: Investor) -> float:
+        return self.shares.get(investor, 0) * self.value
+
+    def get_pre_inflow_value(self, investor: Investor) -> float:
+        return self.shares.get(investor, 0) * self.value - self.inflows.get(investor, 0)
+
+    def get_inflow(self, investor: Investor) -> float:
+        return self.inflows.get(investor, 0)
+
+    def get_share(self, investor: Investor) -> float:
+        return self.shares.get(investor, 0)
+
+    def get_pre_inflow_share(self, investor: Investor) -> float:
+        return (self.shares.get(investor, 0) * self.value - self.get_inflow(investor)) / self.pre_inflow_value
+
+    def get_dividends(self, investor: Investor) -> float:
+        return self.shares.get(investor, 0) * self.dividends
+
+    @property
+    def pre_inflow_value(self) -> float:
+        return self.value - sum(self.inflows.values())
+
+    @property
+    def inflow(self) -> float:
+        return sum(self.inflows.values())
 
 
 class Fund(domain.Entity):
@@ -38,7 +64,7 @@ class Fund(domain.Entity):
     def init(
         self,
         day: domain.Day,
-        inflows: dict[Shareholder, float],
+        inflows: dict[Investor, float],
     ) -> None:
         if any(inflow < 0 for inflow in inflows.values()):
             raise ValueError("initial inflows can't be negative")
@@ -52,7 +78,7 @@ class Fund(domain.Entity):
                 value=all_inflows,
                 dividends=0,
                 inflows=inflows,
-                shares={shareholder: inflow / all_inflows for shareholder, inflow in inflows.items()},
+                shares={investor: inflow / all_inflows for investor, inflow in inflows.items()},
             )
         ]
 
@@ -61,7 +87,7 @@ class Fund(domain.Entity):
         day: domain.Day,
         value: float,
         dividends: float,
-        inflows: dict[Shareholder, float],
+        inflows: dict[Investor, float],
     ) -> None:
         if not self.rows:
             raise ValueError("fund is not initialized")
@@ -75,11 +101,13 @@ class Fund(domain.Entity):
             raise ValueError("fund must be not updated in the same month")
 
         prev_value_share = 1 - sum(inflows.values()) / value
-        all_shareholders = last_row.shares.keys() | inflows.keys()
+        all_investors = last_row.shares.keys() | inflows.keys()
         shares = {
-            shareholder: last_row.shares.get(shareholder, 0) * prev_value_share + inflows.get(shareholder, 0) / value
-            for shareholder in all_shareholders
+            investors: last_row.shares.get(investors, 0) * prev_value_share + inflows.get(investors, 0) / value
+            for investors in all_investors
         }
+        all_shares = sum(shares.values())
+        shares = {investor: share / all_shares for investor, share in shares.items()}
 
         self.day = day
         self.rows.append(
