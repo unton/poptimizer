@@ -33,6 +33,7 @@ class Portfolio(handler.DTO):
     account_names: list[domain.AccName]
     cash: portfolio.AccountData
     positions: list[portfolio.Position]
+    exclude: list[domain.Ticker]
 
     @classmethod
     def from_portfolio(cls, port: portfolio.Portfolio) -> Self:
@@ -42,6 +43,7 @@ class Portfolio(handler.DTO):
             account_names=sorted(port.account_names),
             cash=port.cash,
             positions=port.positions,
+            exclude=sorted(port.exclude),
         )
 
     @classmethod
@@ -52,6 +54,7 @@ class Portfolio(handler.DTO):
             account_names=sorted(port.account_names),
             cash=port.cash,
             positions=port.positions,
+            exclude=sorted(port.exclude),
         )
 
 
@@ -59,6 +62,14 @@ class Position(handler.DTO):
     account: domain.AccName
     ticker: domain.Ticker
     amount: NonNegativeInt
+
+
+class ExcludeTicker(handler.DTO):
+    ticker: domain.Ticker
+
+
+class NotExcludeTicker(handler.DTO):
+    ticker: domain.Ticker
 
 
 class GetForecast(handler.DTO): ...
@@ -119,6 +130,20 @@ class PortfolioHandler:
         port = await ctx.get_for_update(portfolio.Portfolio)
 
         port.update_position(msg.account, msg.ticker, msg.amount)
+
+        return Portfolio.from_updated_portfolio(port)
+
+    async def exclude_ticker(self, ctx: handler.Ctx, msg: ExcludeTicker) -> Portfolio:
+        port = await ctx.get_for_update(portfolio.Portfolio)
+
+        port.exclude_ticker(msg.ticker)
+
+        return Portfolio.from_updated_portfolio(port)
+
+    async def not_exclude_ticker(self, ctx: handler.Ctx, msg: NotExcludeTicker) -> Portfolio:
+        port = await ctx.get_for_update(portfolio.Portfolio)
+
+        port.not_exclude_ticker(msg.ticker)
 
         return Portfolio.from_updated_portfolio(port)
 
