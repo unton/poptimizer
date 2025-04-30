@@ -13,7 +13,7 @@ class PortfolioHandler:
     def __init__(self) -> None:
         self._lgr = logging.getLogger()
 
-    async def __call__(self, ctx: handler.Ctx, msg: handler.QuotesUpdated) -> handler.PortfolioUpdated:
+    async def __call__(self, ctx: handler.Ctx, msg: handler.IndexesUpdated) -> handler.PortfolioUpdated:
         port = await ctx.get_for_update(portfolio.Portfolio)
 
         if port.day == msg.day:
@@ -60,7 +60,9 @@ class PortfolioHandler:
                 ticker=sec.ticker,
                 lot=sec.lot,
                 price=quotes.result().df[-1].close,
-                turnover=statistics.median(quote.turnover for quote in quotes.result().df[-evolution.test_days :]),
+                turnover=statistics.median(
+                    quote.turnover for quote in quotes.result().df[-int(evolution.minimal_returns_days) :]
+                ),
             )
             for sec, quotes in zip(sec_table.df, quotes_tasks, strict=True)
             if len(quotes.result().df) > evolution.minimal_returns_days and quotes.result().df[-1].day == update_day

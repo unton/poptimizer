@@ -31,10 +31,10 @@ class Model(domain.Entity):
     forecast_days: PositiveInt = 1
     genes: genetics.Genes = Field(default_factory=lambda: genotype.Genotype.model_validate({}).genes)
     duration: float = 0
-    alfa: list[FiniteFloat] = Field(default_factory=list)
-    llh: list[FiniteFloat] = Field(default_factory=list)
-    mean: list[list[FiniteFloat]] = Field(default_factory=list)
-    cov: list[list[FiniteFloat]] = Field(default_factory=list)
+    alfa: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
+    llh: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
+    mean: list[list[FiniteFloat]] = Field(default_factory=list[list[FiniteFloat]])
+    cov: list[list[FiniteFloat]] = Field(default_factory=list[list[FiniteFloat]])
     risk_tolerance: FiniteFloat = Field(default=0, ge=0, le=1)
 
     @model_validator(mode="after")
@@ -104,10 +104,10 @@ class Evolution(domain.Entity):
     state: State = State.EVAL_NEW_BASE_MODEL
     step: PositiveInt = 1
     base_model_uid: domain.UID = domain.UID("")
-    alfa: list[FiniteFloat] = Field(default_factory=list)
-    llh: list[FiniteFloat] = Field(default_factory=list)
+    alfa: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
+    llh: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
     duration: NonNegativeFloat = 0
-    test_days: int = Field(default=2, ge=2)
+    test_days: float = Field(default=2, ge=1)
     alfa_delta_critical: NonPositiveFloat = 0
     llh_delta_critical: NonPositiveFloat = 0
     minimal_returns_days: int = _INITIAL_MINIMAL_RETURNS_DAYS
@@ -129,7 +129,6 @@ class Evolution(domain.Entity):
         self.tickers = tickers
         self.forecast_days = forecast_days
         self.step = 1
-        self.test_days = max(2, self.test_days - 1)
         self.minimal_returns_days = max(1, self.minimal_returns_days - 1)
         self.state = State.EVAL_NEW_BASE_MODEL
 

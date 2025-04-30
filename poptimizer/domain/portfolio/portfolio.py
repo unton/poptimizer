@@ -25,7 +25,7 @@ class Position(BaseModel):
     lot: PositiveInt
     price: PositiveFloat
     turnover: NonNegativeFloat
-    accounts: AccountData = Field(default_factory=dict)
+    accounts: AccountData = Field(default_factory=dict[domain.AccName, int])
 
 
 class NormalizedPosition(BaseModel):
@@ -36,26 +36,26 @@ class NormalizedPosition(BaseModel):
 
 class Portfolio(domain.Entity):
     trading_interval: float = Field(consts.INITIAL_FORECAST_DAYS, ge=1)
-    traded: bool = False
+    sold: NonNegativeInt = 0
     account_names: Annotated[
         set[domain.AccName],
         PlainSerializer(
             list,
             return_type=list,
         ),
-    ] = Field(default_factory=set)
-    cash: AccountData = Field(default_factory=dict)
+    ] = Field(default_factory=set[domain.AccName])
+    cash: AccountData = Field(default_factory=dict[domain.AccName, int])
     positions: Annotated[
         list[Position],
         AfterValidator(domain.sorted_with_ticker_field_validator),
-    ] = Field(default_factory=list)
+    ] = Field(default_factory=list[Position])
     exclude: Annotated[
         set[domain.Ticker],
         PlainSerializer(
             list,
             return_type=list,
         ),
-    ] = Field(default_factory=set)
+    ] = Field(default_factory=set[domain.Ticker])
 
     @model_validator(mode="after")
     def _positions_have_know_accounts(self) -> Self:
@@ -90,12 +90,19 @@ class Portfolio(domain.Entity):
         if not self.ver:
             old_day = self.day
 
+        avg_sold_per_day = sum(1 for pos in self.positions if pos.accounts if pos.accounts) / int(self.trading_interval)
+        if not avg_sold_per_day:
+            self.sold = 0
+
+            return
+
         for day in reversed(trading_days):
             if day <= old_day:
                 break
 
-            self.trading_interval = self.trading_interval + 1 / int(self.trading_interval) - self.traded
-            self.traded = False
+            self.trading_interval += 1 - self.sold / avg_sold_per_day
+            self.trading_interval = max(1, self.trading_interval)
+            self.sold = 0
 
     def create_acount(self, name: domain.AccName) -> None:
         if name in self.account_names:
@@ -163,7 +170,7 @@ class Portfolio(domain.Entity):
                     position.accounts.pop(acc_name)
 
                 if not position.accounts:
-                    self.traded = True
+                    self.sold += 1
 
     def normalized_turnover(self) -> list[float]:
         values = [position.price * sum(position.accounts.values()) for position in self.positions]
