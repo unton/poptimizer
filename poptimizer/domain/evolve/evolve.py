@@ -94,6 +94,7 @@ class Model(domain.Entity):
 class State(StrEnum):
     EVAL_NEW_BASE_MODEL = "evaluating new base model"
     EVAL_MODEL = "evaluating model"
+    EVAL_OUTDATE_MODEL = "evaluating outdated model"
     REEVAL_CURRENT_BASE_MODEL = "reevaluating current base model"
     CREATE_NEW_MODEL = "creating new model"
 
@@ -133,10 +134,13 @@ class Evolution(domain.Entity):
         self.state = State.EVAL_NEW_BASE_MODEL
 
     def adj_alfa_delta_critical(self, duration: NonNegativeFloat) -> float:
-        return self.alfa_delta_critical * min(1, self.duration / duration)
+        return self.alfa_delta_critical * self._duration_adj(duration)
 
     def adj_llh_delta_critical(self, duration: NonNegativeFloat) -> float:
-        return self.llh_delta_critical * min(1, self.duration / duration)
+        return self.llh_delta_critical * self._duration_adj(duration)
+
+    def _duration_adj(self, duration: NonNegativeFloat) -> NonNegativeFloat:
+        return min(1, self.duration / duration) ** 0.5
 
     def new_base(self, model: Model) -> None:
         self.base_model_uid = model.uid

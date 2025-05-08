@@ -69,6 +69,14 @@ class EmbFeatures(genetics.Chromosome):
 
 
 class EmbSeqFeatures(genetics.Chromosome):
+    week_day: Annotated[
+        float,
+        genetics.bool_phenotype(),
+    ] = genetics.random_default_range(-1, 1)
+    month_day: Annotated[
+        float,
+        genetics.bool_phenotype(),
+    ] = genetics.random_default_range(-1, 1)
     year_day: Annotated[
         float,
         genetics.bool_phenotype(),

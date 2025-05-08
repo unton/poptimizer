@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-__version__ = "3.0.0b1"
+__version__ = "3.0.0b3"
 
 ROOT: Final = Path(__file__).parents[1]
 
@@ -19,4 +19,3 @@ INITIAL_HISTORY_DAYS_START: Final = YEAR_IN_TRADING_DAYS
 INITIAL_HISTORY_DAYS_END: Final = INITIAL_HISTORY_DAYS_START + MONTH_IN_TRADING_DAYS
 INITIAL_FORECAST_DAYS: Final = 1
 INITIAL_TEST_DAYS: Final = YEAR_IN_TRADING_DAYS
-INITIAL_POPULATION: Final = 1
