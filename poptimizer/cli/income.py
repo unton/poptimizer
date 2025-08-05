@@ -2,7 +2,7 @@ import contextlib
 from typing import Annotated
 
 import typer
-import uvloop
+import winloop
 
 from poptimizer import config
 from poptimizer.adapters import logger, mongo
@@ -33,4 +33,4 @@ def income(
     ],
 ) -> None:
     """Print CPI-adjusted income report."""
-    uvloop.run(_run(funds.Investor(investor), months))
+    winloop.run(_run(funds.Investor(investor), months))

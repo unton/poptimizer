@@ -7,7 +7,7 @@ from types import FrameType
 from typing import TYPE_CHECKING, Any
 
 import torch
-import uvloop
+import winloop
 
 from poptimizer import config
 from poptimizer.adapters import http_session, logger, mongo
@@ -55,9 +55,9 @@ async def _run(*, check_memory: bool = False) -> int:
     return 1
 
 
-def _run_in_uvloop() -> None:
+def _run_in_winloop() -> None:
     with (
-        asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner,
+        asyncio.Runner(loop_factory=winloop.new_event_loop) as runner,
         contextlib.suppress(asyncio.CancelledError),
     ):
         sys.exit(runner.run(_run(check_memory=True)))
@@ -67,7 +67,7 @@ def _run_in_process() -> int:
     stopping = False
 
     while True:
-        process = mp.Process(target=_run_in_uvloop, daemon=True)
+        process = mp.Process(target=_run_in_winloop, daemon=True)
         process.start()
 
         try:
@@ -96,7 +96,7 @@ def _maybe_run_in_process() -> None:
         case True:
             sys.exit(_run_in_process())
         case False:
-            sys.exit(uvloop.run(_run()))
+            sys.exit(winloop.run(_run()))
 
 
 def run() -> None:

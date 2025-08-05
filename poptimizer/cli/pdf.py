@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Annotated, Final
 
 import typer
-import uvloop
+import winloop
 
 from poptimizer import config
 from poptimizer.adapters import logger, mongo
@@ -75,4 +75,4 @@ def pdf(
     ] = 0,
 ) -> None:
     """Add data to fund statistics and create pdf report for last 5 years."""
-    uvloop.run(_run(day.date(), dividends, inflows))
+    winloop.run(_run(day.date(), dividends, inflows))
