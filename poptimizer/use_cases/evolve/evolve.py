@@ -1,5 +1,6 @@
 import logging
 import operator
+import statistics
 from typing import Final, Protocol, Self
 
 import bson
@@ -47,7 +48,7 @@ class Ctx(Protocol):
 
     async def count_models(self) -> int: ...
 
-    async def next_model_for_update(self) -> evolve.Model: ...
+    async def next_model_for_update(self, alfa: float, llh: float) -> evolve.Model: ...
 
     async def sample_models(self, n: int) -> list[evolve.Model]: ...
 
@@ -78,9 +79,8 @@ class EvolutionHandler:
         ctx: Ctx,
         msg: handler.DataChecked,
     ) -> handler.ModelDeleted | handler.ModelEvaluated:
-        count = await self._init_evolution(ctx)
-        evolution = await self._init_step(ctx, msg)
-        model = await self._get_model(ctx, evolution, count)
+        evolution, count = await self._init_step(ctx, msg)
+        model = await self._get_model(ctx, evolution)
         self._lgr.info(
             "Day %s step %d models %d: %s - %s",
             evolution.day,
@@ -101,17 +101,16 @@ class EvolutionHandler:
 
         return event
 
-    async def _init_evolution(self, ctx: Ctx) -> int:
-        if count := await ctx.count_models():
-            return count
-
-        self._lgr.info("Creating start models")
-        await ctx.get_for_update(evolve.Model, _random_uid())
-
-        return 1
-
-    async def _init_step(self, ctx: Ctx, msg: handler.DataChecked) -> evolve.Evolution:
+    async def _init_step(self, ctx: Ctx, msg: handler.DataChecked) -> tuple[evolve.Evolution, int]:
         evolution = await ctx.get_for_update(evolve.Evolution)
+
+        if not (count := await ctx.count_models()):
+            self._lgr.info("Creating start models")
+            uid = _random_uid()
+            await ctx.get_for_update(evolve.Model, uid)
+            evolution.base_model_uid = uid
+            evolution.test_days = 1
+            count = 1
 
         match evolution.day == msg.day:
             case True:
@@ -124,19 +123,14 @@ class EvolutionHandler:
                     port.forecast_days,
                 )
 
-        return evolution
+        return evolution, count
 
-    async def _get_model(self, ctx: Ctx, evolution: evolve.Evolution, count: int) -> evolve.Model:
+    async def _get_model(self, ctx: Ctx, evolution: evolve.Evolution) -> evolve.Model:
         match evolution.state:
             case evolve.State.EVAL_NEW_BASE_MODEL:
-                return await self._get_next_model(ctx, count)
+                return await ctx.next_model_for_update(statistics.mean(evolution.alfa), statistics.mean(evolution.llh))
             case evolve.State.EVAL_MODEL:
-                if count == 1:
-                    evolution.state = evolve.State.CREATE_NEW_MODEL
-
-                    return await self._get_model(ctx, evolution, count)
-
-                model = await self._get_next_model(ctx, count)
+                model = await ctx.next_model_for_update(statistics.mean(evolution.alfa), statistics.mean(evolution.llh))
                 if model.uid == evolution.base_model_uid:
                     evolution.state = evolve.State.REEVAL_CURRENT_BASE_MODEL
 
@@ -147,22 +141,11 @@ class EvolutionHandler:
             case evolve.State.EVAL_OUTDATE_MODEL:
                 raise errors.UseCasesError(f"can't be in {evolution.state} state")
             case evolve.State.REEVAL_CURRENT_BASE_MODEL:
-                raise errors.UseCasesError(f"can't be in {evolution.state} state")
+                return await ctx.get_for_update(evolve.Model, evolution.base_model_uid)
             case evolve.State.CREATE_NEW_MODEL:
                 model = await ctx.get(evolve.Model, evolution.base_model_uid)
 
                 return await self._make_child(ctx, model)
-
-    async def _get_next_model(self, ctx: Ctx, count: int) -> evolve.Model:
-        while True:
-            model = await ctx.next_model_for_update()
-
-            if count == 1 or model.train_load:
-                return model
-
-            await ctx.delete(model)
-            self._lgr.info("Untrained model deleted")
-            count -= 1
 
     async def _make_child(self, ctx: Ctx, model: evolve.Model) -> evolve.Model:
         parents = await ctx.sample_models(_PARENT_COUNT)
@@ -171,7 +154,6 @@ class EvolutionHandler:
 
         child = await ctx.get_for_update(evolve.Model, _random_uid())
         child.genes = model.make_child_genes(parents[0], parents[1], 1 / model.ver)
-        child.train_load = model.train_load
 
         return child
 
@@ -227,7 +209,7 @@ class EvolutionHandler:
                 evolution.state = evolve.State.EVAL_MODEL
             case evolve.State.EVAL_MODEL:
                 if await self._should_delete(ctx, evolution, model):
-                    evolution.state = evolve.State.EVAL_MODEL
+                    evolution.state = evolve.State.CREATE_NEW_MODEL
 
                     return handler.ModelDeleted(day=evolution.day, uid=model.uid)
 
@@ -251,21 +233,20 @@ class EvolutionHandler:
 
         evolution.new_base(model)
         self._update_test_days(evolution, model)
-        self._update_train_load(evolution, model)
 
         return handler.ModelEvaluated(day=evolution.day, uid=model.uid)
-
-    def _update_train_load(self, evolution: evolve.Evolution, model: evolve.Model) -> None:
-        base_load = model.duration**0.5 * (1 - abs(model.alfa_diff.p - 0.5) + abs(model.llh_diff.p - 0.5))
-        evolution.load_factor = max(evolution.load_factor, 1 / base_load)
-        model.train_load += round(base_load * evolution.load_factor)
 
     def _update_test_days(self, evolution: evolve.Evolution, model: evolve.Model) -> None:
         old_test_days = int(evolution.test_days)
 
-        if model.alfa_mean < 0:
-            evolution.test_days += 1
-            self._lgr.warning("Test days changed - %d -> %d", old_test_days, evolution.test_days)
+        match model.alfa_mean < 0:
+            case True:
+                evolution.test_days += 1
+            case False:
+                evolution.test_days = max(1, evolution.test_days - consts.P_VALUE / (1 - consts.P_VALUE))
+
+        if old_test_days != (new_test_days := int(evolution.test_days)):
+            self._lgr.info("Test days changed - %d -> %d", old_test_days, new_test_days)
 
     async def _should_delete(
         self,

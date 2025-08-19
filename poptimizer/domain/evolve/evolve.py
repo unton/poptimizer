@@ -9,7 +9,6 @@ from pydantic import (
     Field,
     FiniteFloat,
     NonNegativeFloat,
-    NonNegativeInt,
     PositiveInt,
     computed_field,
     model_validator,
@@ -48,7 +47,6 @@ class Model(domain.Entity):
     forecast_days: PositiveInt = 1
     genes: genetics.Genes = Field(default_factory=lambda: genotype.Genotype.model_validate({}).genes)
     duration: float = 0
-    train_load: NonNegativeInt = 0
     alfa: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
     alfa_diff: Stats = Field(default_factory=Stats)
     llh: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
@@ -131,7 +129,7 @@ class Evolution(domain.Entity):
     base_model_uid: domain.UID = domain.UID("")
     alfa: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
     llh: list[FiniteFloat] = Field(default_factory=list[FiniteFloat])
-    test_days: float = Field(default=2, ge=1)
+    test_days: float = Field(default=1, ge=1)
     minimal_returns_days: int = _INITIAL_MINIMAL_RETURNS_DAYS
     load_factor: NonNegativeFloat = 0
 
@@ -153,8 +151,7 @@ class Evolution(domain.Entity):
         self.forecast_days = forecast_days
         self.step = 1
         self.minimal_returns_days = max(1, self.minimal_returns_days - 1)
-        self.test_days = max(1, int(self.test_days) - 1)
-        self.state = State.EVAL_NEW_BASE_MODEL
+        self.state = State.REEVAL_CURRENT_BASE_MODEL
 
     def new_base(self, model: Model) -> None:
         self.base_model_uid = model.uid
