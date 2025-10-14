@@ -21,11 +21,12 @@ class NumFeatures(BaseModel):
     dividends: bool
     returns: bool
     turnover: bool
-    mcftrr: bool
+    mcf2trr: bool
     meogtrr: bool
-    imoex: bool
+    imoex2: bool
     rvi: bool
     rugbitr1y: bool
+    mredc: bool
 
 
 class EmbFeatures(BaseModel):

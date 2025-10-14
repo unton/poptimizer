@@ -35,7 +35,7 @@ class NumFeatures(genetics.Chromosome):
         float,
         genetics.bool_phenotype(),
     ] = genetics.random_default_range(-1, 1)
-    mcftrr: Annotated[
+    mcf2trr: Annotated[
         float,
         genetics.bool_phenotype(),
     ] = genetics.random_default_range(-1, 1)
@@ -43,7 +43,7 @@ class NumFeatures(genetics.Chromosome):
         float,
         genetics.bool_phenotype(),
     ] = genetics.random_default_range(-1, 1)
-    imoex: Annotated[
+    imoex2: Annotated[
         float,
         genetics.bool_phenotype(),
     ] = genetics.random_default_range(-1, 1)
@@ -52,6 +52,10 @@ class NumFeatures(genetics.Chromosome):
         genetics.bool_phenotype(),
     ] = genetics.random_default_range(-1, 1)
     rugbitr1y: Annotated[
+        float,
+        genetics.bool_phenotype(),
+    ] = genetics.random_default_range(-1, 1)
+    mredc: Annotated[
         float,
         genetics.bool_phenotype(),
     ] = genetics.random_default_range(-1, 1)

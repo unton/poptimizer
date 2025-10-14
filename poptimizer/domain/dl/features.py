@@ -16,11 +16,12 @@ class NumFeat(StrEnum):
     DIVIDENDS = auto()
     RETURNS = auto()
     TURNOVER = auto()
-    MCFTRR = auto()
+    MCF2TRR = auto()
     MEOGTRR = auto()
-    IMOEX = auto()
+    IMOEX2 = auto()
     RVI = auto()
     RUGBITR1Y = auto()
+    MREDC = auto()
 
 
 @unique

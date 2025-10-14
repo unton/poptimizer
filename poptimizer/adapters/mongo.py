@@ -1,4 +1,5 @@
 import datetime
+import random
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Final
@@ -38,43 +39,84 @@ class Repo:
     def __init__(self, mongo_db: MongoDatabase) -> None:
         self._db = mongo_db
 
-    async def next_model(self, alfa: float, llh: float) -> evolve.Model:
+    async def next_model(self, uid: domain.UID) -> tuple[evolve.Model, bool]:
         collection_name = adapter.get_component_name(evolve.Model)
         collection = self._db[collection_name]
 
-        pipeline = [
-            {
-                "$addFields": {
-                    "product": {
-                        "$multiply": [
-                            {"$subtract": ["$alfa_mean", alfa]},
-                            {"$subtract": ["$llh_mean", llh]},
-                        ],
-                    },
-                },
-            },
-            {
-                "$sort": {
-                    "day": pymongo.ASCENDING,
-                    "product": pymongo.DESCENDING,
-                },
-            },
-            {
-                "$limit": 1,
-            },
-            {
-                "$project": {
-                    "_id": 1,
-                }
-            },
-        ]
+        projection = ["_id", "day", "llh_mean", "alfa_mean"]
+        docs = [doc async for doc in collection.find({}, projection=projection)]
 
-        try:
-            doc = await anext(await collection.aggregate(pipeline))
-        except (PyMongoError, StopAsyncIteration) as err:
-            raise errors.AdapterError("can't load next organism") from err
+        key_count = len(projection)
+        target: MongoDocument | None = None
+        min_day = docs[0]["day"]
 
-        return await self.get(evolve.Model, domain.UID(doc["_id"]))
+        for doc in docs:
+            if len(doc) != key_count:
+                return await self.get(evolve.Model, domain.UID(doc["_id"])), True
+
+            if doc["_id"] == uid:
+                target = doc
+
+            min_day = min(min_day, doc["day"])
+
+        if target is None:
+            return await self.get(evolve.Model, domain.UID(random.choice(docs)["_id"])), False  # noqa: S311
+
+        docs = [doc for doc in docs if doc["day"] == min_day]
+
+        if len(docs) == 1:
+            return await self.get(evolve.Model, domain.UID(docs[0]["_id"])), False
+
+        return await self._farthest_from_target(docs, target)
+
+    async def _farthest_from_target(
+        self,
+        docs: list[MongoDocument],
+        target: MongoDocument,
+    ) -> tuple[evolve.Model, bool]:
+        min_llh = docs[0]
+        max_llh = docs[0]
+        min_alfa = docs[0]
+        max_alfa = docs[0]
+
+        for doc in docs:
+            if doc["llh_mean"] < min_llh["llh_mean"]:
+                min_llh = doc
+
+            if doc["llh_mean"] > max_llh["llh_mean"]:
+                max_llh = doc
+
+            if doc["alfa_mean"] < min_alfa["alfa_mean"]:
+                min_alfa = doc
+
+            if doc["alfa_mean"] > max_alfa["alfa_mean"]:
+                max_alfa = doc
+
+        selected = max(
+            (
+                min_llh,
+                False,
+                (target["llh_mean"] - min_llh["llh_mean"]) / (max_llh["llh_mean"] - min_llh["llh_mean"]),
+            ),
+            (
+                max_llh,
+                True,
+                (max_llh["llh_mean"] - target["llh_mean"]) / (max_llh["llh_mean"] - min_llh["llh_mean"]),
+            ),
+            (
+                min_alfa,
+                False,
+                (target["alfa_mean"] - min_alfa["alfa_mean"]) / (max_alfa["alfa_mean"] - min_alfa["alfa_mean"]),
+            ),
+            (
+                max_alfa,
+                True,
+                (max_alfa["alfa_mean"] - target["alfa_mean"]) / (max_alfa["alfa_mean"] - min_alfa["alfa_mean"]),
+            ),
+            key=lambda x: x[2],
+        )
+
+        return await self.get(evolve.Model, domain.UID(selected[0]["_id"])), selected[1]
 
     async def sample_models(self, n: int) -> list[evolve.Model]:
         collection_name = adapter.get_component_name(evolve.Model)
@@ -183,7 +225,16 @@ class Repo:
         try:
             result = await collection.delete_one({_MONGO_ID: entity.uid})
         except PyMongoError as err:
-            raise errors.AdapterError("can't sample organisms") from err
+            raise errors.AdapterError("can't delete organisms") from err
 
         if result.deleted_count != 1:
             raise errors.AdapterError(f"can't delete {collection_name}.{entity.uid}")
+
+    async def drop(self, entity_type: type[domain.Entity]) -> None:
+        collection_name = adapter.get_component_name(entity_type)
+        collection = self._db[collection_name]
+
+        try:
+            await collection.drop()
+        except PyMongoError as err:
+            raise errors.AdapterError("can't delete {collection_name}") from err
