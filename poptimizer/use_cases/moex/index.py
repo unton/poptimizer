@@ -1,5 +1,7 @@
 import asyncio
+import logging
 from datetime import date, timedelta
+from typing import Final
 
 import aiohttp
 import aiomoex
@@ -9,10 +11,13 @@ from poptimizer.domain import domain
 from poptimizer.domain.moex import index
 from poptimizer.use_cases import handler
 
+_MAX_INDEX_LAG: Final = timedelta(days=7)
+
 
 class IndexesHandler:
     def __init__(self, http_client: aiohttp.ClientSession) -> None:
         self._http_client = http_client
+        self._lgr = logging.getLogger()
 
     async def __call__(self, ctx: handler.Ctx, msg: handler.QuotesUpdated) -> handler.IndexesUpdated:
         async with asyncio.TaskGroup() as tg:
@@ -33,6 +38,10 @@ class IndexesHandler:
 
         table.update(update_day, rows)
 
+        last_date = table.last_row_date()
+        if last_date is not None and (update_day - last_date) > _MAX_INDEX_LAG:
+            self._lgr.warning("Index %s last value is too old: %s", ticker, last_date)
+
     async def _download(
         self,
         ticker: str,
@@ -51,4 +60,18 @@ class IndexesHandler:
             )
 
         with handler.wrap_validation_err(f"invalid {ticker} data"):
-            return TypeAdapter(list[index.Row]).validate_python(json)
+            return _deduplicate_rows(TypeAdapter(list[index.Row]).validate_python(json))
+
+
+def _deduplicate_rows(rows: list[index.Row]) -> list[index.Row]:
+    prev_row: index.Row | None = None
+    rows_deduplicated: list[index.Row] = []
+
+    for row in rows:
+        if row == prev_row:
+            continue
+
+        rows_deduplicated.append(row)
+        prev_row = row
+
+    return rows_deduplicated
