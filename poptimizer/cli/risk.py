@@ -2,7 +2,7 @@ import contextlib
 from typing import Annotated
 
 import typer
-import uvloop
+import winloop
 
 from poptimizer import config
 from poptimizer.adapters import logger, mongo
@@ -28,4 +28,4 @@ def risk(
     ],
 ) -> None:
     """Print fund risk-return report for last months."""
-    uvloop.run(_run(months))
+    winloop.run(_run(months))

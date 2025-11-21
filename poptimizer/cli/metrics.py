@@ -1,6 +1,6 @@
 import contextlib
 
-import uvloop
+import winloop
 
 from poptimizer import config
 from poptimizer.adapters import logger, mongo
@@ -22,4 +22,4 @@ async def _run() -> None:
 
 def metrics() -> None:
     """Plot all models metrics."""
-    uvloop.run(_run())
+    winloop.run(_run())
