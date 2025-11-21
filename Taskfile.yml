@@ -16,6 +16,7 @@ tasks:
     cmds:
       - scoop install {{.TOOLS}}
       - uv sync --frozen
+      - uv pip install torch --extra-index-url https://download.pytorch.org/whl/cu128
       - cd {{.FRONTEND}} && npm install
       - task: build
 
