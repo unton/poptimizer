@@ -5,7 +5,7 @@ import sys
 from collections.abc import Callable, Coroutine
 
 import torch
-import uvloop
+import winloop
 
 from poptimizer.adapters import gmail, http, logger, mongo
 from poptimizer.cli import config, safe
@@ -29,13 +29,13 @@ class Run(config.Cfg):
             case True:
                 sys.exit(self._run_in_process())
             case False:
-                sys.exit(uvloop.run(self._run()))
+                sys.exit(winloop.run(self._run()))
 
     def _run_in_process(self) -> int:
         stopping = False
 
         while True:
-            process = mp.Process(target=self._run_in_uvloop, daemon=True)
+            process = mp.Process(target=self._run_in_winloop, daemon=True)
             process.start()
 
             try:
@@ -57,9 +57,9 @@ class Run(config.Cfg):
                 case _:
                     return 1
 
-    def _run_in_uvloop(self) -> None:
+    def _run_in_winloop(self) -> None:
         with (
-            asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner,
+            asyncio.Runner(loop_factory=winloop.new_event_loop) as runner,
             contextlib.suppress(asyncio.CancelledError),
         ):
             sys.exit(runner.run(self._run(check_memory=True)))
