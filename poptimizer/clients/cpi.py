@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 _SHEET_NAME: Final = "Лист1"
 
 _DATES_ROW: Final = 1
-_FIRST_DATE_COL: Final = 3
+_FIRST_DATE_COL: Final = 2
 _FIRST_DATE_VALUE: Final = date(year=2002, month=1, day=1)
 _CPI_HEADER_VALUE: Final = "Все товары и услуги"
 
